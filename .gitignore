@@ -1,0 +1,19 @@
+# --- 大容量成果物・データは ~/work/driveclip/ と ~/data/driveclip/ へ ---
+data/
+logs/
+runs/
+model_ckpt/
+*.sif
+*.pt
+*.bin
+*.mp4
+
+# --- 外部リポジトリ本体は extern/README.md から再取得する ---
+extern/*/repo/
+
+.cache/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+/work

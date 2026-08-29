@@ -1,0 +1,165 @@
+diff --git a/inference/frame.py b/inference/frame.py
+index ba7a63d..7022d93 100644
+--- a/inference/frame.py
++++ b/inference/frame.py
+@@ -1,4 +1,5 @@
+ import cv2
++print(cv2.__version__)
+ import os
+ from tqdm import tqdm
+ 
+diff --git a/inference/inference.py b/inference/inference.py
+index d9c0505..63379b3 100644
+--- a/inference/inference.py
++++ b/inference/inference.py
+@@ -1,5 +1,6 @@
+ import argparse
+ import clip
++import os
+ import torch
+ import torch.utils.data as data
+ from PIL import Image
+@@ -8,33 +9,44 @@ import json
+ import joblib
+ from torch.utils.data import DataLoader
+ from tqdm import tqdm
++import numpy as np
+ from frame import extract_frames
++import glob
++import math
+ 
+ def parse_args():
+     parser = argparse.ArgumentParser(description='Script to extract frames and run inference')
+     parser.add_argument('--video', required=True, help='Path to input video')
+     parser.add_argument('--frame', required=True, help='Path to store extracted frames')
++    parser.add_argument('--model_path', default='/workspace/model_ckpt/syndd1_vitl14-per1_hypc_429_1000_ft.pkl',
++                        help='Path to classifier model .pkl (joblib). Example: /workspace/model_ckpt/syndd1_...pkl')
++    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for CLIP feature extraction')
+     args = parser.parse_args()
+     return args
+ 
++def softmax(x, axis=1):
++    x = x - np.max(x, axis=axis, keepdims=True)
++    e = np.exp(x)
++    return e / np.sum(e, axis=axis, keepdims=True)
++
+ def main():
+-    # Parse command line arguments
+     args = parse_args()
+ 
+-    # Select model backbone
+-    model_name= 'ViT-L/14'
+-
+-    new_data_dir = args.frame
++    model_name = 'ViT-L/14'
+     device = "cuda" if torch.cuda.is_available() else "cpu"
++
++    # load CLIP model
++    print("Loading CLIP model:", model_name, "-> device:", device)
+     model, preprocess = clip.load(model_name, device)
+ 
+-    # Extract frame from video and create dataset
++    # ensure frames dir exists and extract frames
++    new_data_dir = args.frame
+     extract_frames(args.video, args.frame, fps=1)
+ 
+     class UnlabeledImageDataset(data.Dataset):
+         def __init__(self, folder, transform=None):
+             self.transform = transform
+-            self.image_files = list(Path(folder).glob('*.jpg'))
++            self.image_files = sorted(list(Path(folder).glob('*.jpg')))
+ 
+         def __len__(self):
+             return len(self.image_files)
+@@ -46,39 +58,80 @@ def main():
+                 image = self.transform(image)
+             return image, str(image_path)
+ 
+-    def get_features(dataset):
++    def get_features(dataset, batch_size=8):
+         all_features = []
+         filepaths = []
+         print("running inference...")
+ 
++        loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+         with torch.no_grad():
+-            for images, paths in tqdm(DataLoader(dataset, batch_size=1, shuffle=False)):
++            for batch in tqdm(loader):
++                images, paths = batch
+                 images = images.to(device)
+-                features = model.encode_image(images)
+-                all_features.append(features.cpu())
++                features = model.encode_image(images)  # shape (B, D)
++                features = features.cpu()
++                all_features.append(features)
+                 filepaths.extend(paths)
+ 
+-        return torch.cat(all_features).numpy(), filepaths 
++        if len(all_features) == 0:
++            return np.zeros((0, model.visual.output_dim)), []
++        feat = torch.cat(all_features).numpy()
++        return feat, filepaths
+ 
+     new_dataset = UnlabeledImageDataset(new_data_dir, transform=preprocess)
+-    new_features, new_filepaths = get_features(new_dataset)
++    new_features, new_filepaths = get_features(new_dataset, batch_size=args.batch_size)
++
++    # model file check
++    model_path = args.model_path
++    if not Path(model_path).exists():
++        print("ERROR: model not found:", model_path)
++        print("Available models in model_ckpt:")
++        for p in sorted(glob.glob("model_ckpt/*")):
++            print(" -", p)
++        raise FileNotFoundError(model_path)
+ 
+-    classifier = joblib.load(f"model_ckpt/vitl14-per1_429_1000.pkl")
++    print("Loading classifier:", model_path)
++    classifier = joblib.load(model_path)
+ 
++    # predict
+     new_predictions = classifier.predict(new_features)
+-    new_probs = classifier.predict_proba(new_features)
+ 
++    # predict_proba fallback
++    if hasattr(classifier, "predict_proba"):
++        new_probs = classifier.predict_proba(new_features)
++    elif hasattr(classifier, "decision_function"):
++        df = classifier.decision_function(new_features)
++        # make sure shape is (N, n_classes)
++        if df.ndim == 1:
++            # binary case -> convert to two-column scores
++            df = np.vstack([-df, df]).T
++        new_probs = softmax(df, axis=1)
++    else:
++        # no probability output; produce one-hot like scores
++        print("Warning: classifier has no predict_proba or decision_function. Producing one-hot probs.")
++        n_samples = new_features.shape[0]
++        n_classes = len(np.unique(new_predictions))
++        probs = np.zeros((n_samples, n_classes))
++        for i, p in enumerate(new_predictions):
++            probs[i, int(p)] = 1.0
++        new_probs = probs
++
++    # compose results
+     results = {}
+     for i in range(len(new_filepaths)):
+         results[new_filepaths[i]] = {
+             'prediction': int(new_predictions[i]),
+-            'prob_score': new_probs[i].tolist() 
++            'prob_score': new_probs[i].tolist()
+         }
+ 
+-    with open('results/frame_predictions.json', 'w') as f:
++    # 出力先を動画ごとに分ける（衝突防止）
++    os.makedirs(args.frame, exist_ok=True)
++    video_stem = Path(args.video).stem
++    out_path = os.path.join(args.frame, f'frame_predictions_{video_stem}.json')
++    with open(out_path, 'w') as f:
+         json.dump(results, f)
+ 
+-    print("Model finished")
++    print("Saved predictions to", out_path)
+ 
+ if __name__ == "__main__":
+     main()
