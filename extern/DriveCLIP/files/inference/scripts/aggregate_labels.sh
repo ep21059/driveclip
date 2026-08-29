@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:0                       # GPU不要なら 0 に
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=2G
-#SBATCH --output=/home/ryoc1220/DriveCLIP/logs/aggregate_labels_%j.out
-#SBATCH --error=/home/ryoc1220/DriveCLIP/logs/aggregate_labels_%j.err
+#SBATCH --output=/home/ryoc1220/work/driveclip/logs/aggregate_labels_%j.out
+#SBATCH --error=/home/ryoc1220/work/driveclip/logs/aggregate_labels_%j.err
 #SBATCH --time=00:10:00
 
 #SLACK: notify-start
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 # ---------- 必須：あなたのホスト上のプロジェクトルート ----------
-HOST_PROJECT_ROOT=/home/ryoc1220/DriveCLIP
+HOST_PROJECT_ROOT=/home/ryoc1220/extern/DriveCLIP
 
 # Singularity image の絶対パス（実際の場所に合わせて修正）
 SIF_PATH=${HOST_PROJECT_ROOT}/singularity/driveclip.sif

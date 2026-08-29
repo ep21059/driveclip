@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=4G
 #SBATCH --time=00:10:00
-#SBATCH --output=/home/ryoc1220/DriveCLIP/logs/check_predictions.%A_%a.out
-#SBATCH --error=/home/ryoc1220/DriveCLIP/logs/check_predictions.%A_%a.err
+#SBATCH --output=/home/ryoc1220/work/driveclip/logs/check_predictions.%A_%a.out
+#SBATCH --error=/home/ryoc1220/work/driveclip/logs/check_predictions.%A_%a.err
 #SBATCH --array=0-0   # 動画数に合わせて変更
 
 #SLACK: notify-start
@@ -18,7 +18,7 @@ set -euo pipefail
 
 # JSON のパス
 VIDEO_NAME="test"   # 動画名に合わせて変更
-JSON_PATH="/home/ryoc1220/DriveCLIP/data/frame_predictions/${VIDEO_NAME}/frame_predictions_${VIDEO_NAME}.json"
+JSON_PATH="/home/ryoc1220/data/driveclip/data/frame_predictions/${VIDEO_NAME}/frame_predictions_${VIDEO_NAME}.json"
 
 # Python スクリプトをここで直接実行（ダブルクォートで変数展開）
 python3 - <<PYTHON_EOF
