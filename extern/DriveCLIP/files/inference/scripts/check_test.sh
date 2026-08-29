@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=8G
-#SBATCH --output=/home/ryoc1220/work/driveclip/logs/driveclip_infer.%A_%a.out
-#SBATCH --error=/home/ryoc1220/work/driveclip/logs/driveclip_infer.%A_%a.err
+#SBATCH --output=/home/ryoc1220/research/driveclip/experiments/logs/driveclip_infer.%A_%a.out
+#SBATCH --error=/home/ryoc1220/research/driveclip/experiments/logs/driveclip_infer.%A_%a.err
 #SBATCH --time=02:00:00
 #SBATCH --array=0-0   # video_list.txt の行数に合わせて変更すること
 
@@ -20,10 +20,10 @@ set -euo pipefail
 # 環境 / パス（必要なら書き換える）
 # ---------------------------
 # Singularity image の実パスに置き換えてください．
-SIF_PATH=/home/ryoc1220/containers/driveclip.sif
+SIF_PATH=/home/ryoc1220/shared/containers/driveclip.sif
 
 # プロジェクトルート（ホスト）
-HOST_PROJECT_ROOT=/home/ryoc1220/extern/DriveCLIP
+HOST_PROJECT_ROOT=/home/ryoc1220/shared/extern/DriveCLIP
 
 # リポジトリ内 inference スクリプトの位置（バインド後は /workspace/inference）
 REPO_SUBDIR=inference
@@ -98,8 +98,8 @@ echo "Output dir: ${OUTPUT_DIR}"
 # ---------------------------
 singularity exec --nv --cleanenv \
   --env PYTHONNOUSERSITE=1 \
-  --bind /home/ryoc1220/extern/DriveCLIP:/workspace \
-  /home/ryoc1220/containers/driveclip.sif \
+  --bind /home/ryoc1220/shared/extern/DriveCLIP:/workspace \
+  /home/ryoc1220/shared/containers/driveclip.sif \
   python3 - <<'PY'
 import sys
 import numpy, importlib
